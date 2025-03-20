@@ -4,6 +4,7 @@ import tempfile
 import pandas as pd
 import threading
 import time
+import pickle
 from utils.document_processor import (
     process_pdf, process_csv, process_audio, 
     process_website, preprocess_text, chunk_text
@@ -20,19 +21,73 @@ st.set_page_config(
     layout="wide"
 )
 
-# Initialize session state variables
+# Initialize or load data from disk
+DATA_DIR = "data"
+VECTOR_STORE_PATH = os.path.join(DATA_DIR, "vector_store.pkl")
+COLLECTIONS_PATH = os.path.join(DATA_DIR, "collections.pkl")
+
+# Create data directory if it doesn't exist
+if not os.path.exists(DATA_DIR):
+    os.makedirs(DATA_DIR)
+
+# Initialize or load vector store
 if "vector_store" not in st.session_state:
     st.session_state.vector_store = VectorStore()
+    # Try to load from disk if exists
+    if os.path.exists(VECTOR_STORE_PATH):
+        try:
+            st.session_state.vector_store.load(VECTOR_STORE_PATH)
+            st.sidebar.success("Loaded existing vector store from disk")
+        except Exception as e:
+            st.sidebar.error(f"Error loading vector store: {str(e)}")
+
+# Initialize RAG engine
 if "rag_engine" not in st.session_state:
     st.session_state.rag_engine = RAGEngine(st.session_state.vector_store)
+
+# Initialize or load collections
 if "collections" not in st.session_state:
-    st.session_state.collections = {}  # {collection_name: [document_info]}
+    # Default empty collections
+    st.session_state.collections = {}  
+    # Try to load from disk if exists
+    if os.path.exists(COLLECTIONS_PATH):
+        try:
+            with open(COLLECTIONS_PATH, 'rb') as f:
+                st.session_state.collections = pickle.load(f)
+            st.sidebar.success("Loaded existing collections from disk")
+        except Exception as e:
+            st.sidebar.error(f"Error loading collections: {str(e)}")
+
+# Other session state variables
 if "current_collection" not in st.session_state:
-    st.session_state.current_collection = None
+    # Set to first collection if available
+    if st.session_state.collections:
+        st.session_state.current_collection = next(iter(st.session_state.collections))
+    else:
+        st.session_state.current_collection = None
+        
 if "file_monitor_thread" not in st.session_state:
     st.session_state.file_monitor_thread = None
+    
 if "temp_dir" not in st.session_state:
-    st.session_state.temp_dir = tempfile.mkdtemp()
+    st.session_state.temp_dir = os.path.join(DATA_DIR, "temp")
+    if not os.path.exists(st.session_state.temp_dir):
+        os.makedirs(st.session_state.temp_dir)
+
+# Function to save data
+def save_data():
+    try:
+        # Save vector store
+        st.session_state.vector_store.save(VECTOR_STORE_PATH)
+        
+        # Save collections
+        with open(COLLECTIONS_PATH, 'wb') as f:
+            pickle.dump(st.session_state.collections, f)
+            
+        return True
+    except Exception as e:
+        print(f"Error saving data: {str(e)}")
+        return False
     
 # Title and description
 st.title("Multimodal RAG System")
@@ -51,6 +106,7 @@ with st.sidebar:
         if new_collection not in st.session_state.collections:
             st.session_state.collections[new_collection] = []
             st.session_state.current_collection = new_collection
+            save_data()  # Save to disk
             st.success(f"Collection '{new_collection}' created!")
         else:
             st.error(f"Collection '{new_collection}' already exists!")
@@ -80,6 +136,7 @@ with st.sidebar:
                 # Reset current collection if it was the deleted one
                 if st.session_state.current_collection == delete_collection:
                     st.session_state.current_collection = next(iter(st.session_state.collections)) if st.session_state.collections else None
+                save_data()  # Save to disk
                 st.success(f"Collection '{delete_collection}' deleted!")
                 st.rerun()
     
@@ -149,6 +206,7 @@ with tab1:
                             )
                             st.session_state.file_monitor_thread.start()
                         
+                        save_data()  # Save to disk
                         st.success(f"PDF processed and added to collection '{st.session_state.current_collection}'!")
         
         elif doc_type == "CSV":
@@ -191,6 +249,7 @@ with tab1:
                             "path": temp_file_path
                         })
                         
+                        save_data()  # Save to disk
                         st.success(f"CSV processed and added to collection '{st.session_state.current_collection}'!")
         
         elif doc_type == "Audio File":

@@ -47,16 +47,54 @@ class RAGEngine:
         if not chunks:
             return "No relevant information found."
             
-        # Get the top chunk by score
-        top_chunk = chunks[0]["text"]
+        # Use multiple chunks for a more comprehensive answer
+        # Sort the chunks by score
+        sorted_chunks = sorted(chunks, key=lambda x: x["score"], reverse=True)
         
-        # Create a simple response that indicates we're providing information (not generating)
-        response = (
-            f"Based on the information I found, here's what might help answer your question:\n\n"
-            f"{top_chunk[:300]}...\n\n"
-            f"This information was retrieved from the document collection. "
-            f"You can see more details in the 'Retrieved Information' section below."
-        )
+        # Extract key information from top chunks
+        combined_text = ""
+        for i, chunk in enumerate(sorted_chunks[:3]):  # Use top 3 chunks
+            if chunk["score"] > 0.2:  # Only use chunks with reasonable relevance
+                combined_text += chunk["text"] + " "
+        
+        # Extract relevant sentences that might answer the query
+        query_words = set(query.lower().split())
+        sentences = []
+        
+        # Split combined text into sentences (simple approach)
+        text_sentences = combined_text.split('.')
+        
+        for sentence in text_sentences:
+            sentence = sentence.strip()
+            if not sentence:
+                continue
+                
+            # Count query words in the sentence
+            word_matches = sum(1 for word in query_words if word in sentence.lower())
+            
+            # If the sentence has at least 2 query words, include it
+            if word_matches >= min(2, len(query_words)/2):
+                sentences.append(sentence + '.')
+        
+        # Combine the most relevant sentences into an answer
+        if sentences:
+            # Limit to 5 most relevant sentences to keep the answer concise
+            relevant_info = ' '.join(sentences[:5])
+            
+            response = (
+                f"Based on the information in your documents, here's what I found about your query:\n\n"
+                f"{relevant_info}\n\n"
+                f"This information was retrieved from your document collection. "
+                f"You can see the source chunks in the 'Retrieved Information' section below."
+            )
+        else:
+            # Fallback if no sentences are found
+            response = (
+                f"Based on the information I found, here's what might help answer your question:\n\n"
+                f"{sorted_chunks[0]['text'][:350]}...\n\n"
+                f"This information was retrieved from your document collection. "
+                f"You can see more details in the 'Retrieved Information' section below."
+            )
         
         return response
     
