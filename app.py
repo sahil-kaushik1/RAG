@@ -13,6 +13,10 @@ from utils.vector_store import VectorStore
 from utils.rag_engine import RAGEngine
 from utils.file_monitor import start_file_monitoring
 from utils.web_scraper import get_website_text_content
+from utils.nltk_setup import download_nltk_data
+
+# Download required NLTK data
+download_nltk_data()
 
 # Page configuration
 st.set_page_config(
