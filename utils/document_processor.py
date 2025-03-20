@@ -3,17 +3,9 @@ import io
 import re
 import PyPDF2
 import pandas as pd
-import nltk
-from nltk.tokenize import sent_tokenize
 import speech_recognition as sr
 import pdfplumber
 from trafilatura import fetch_url, extract
-
-# Download NLTK data (if needed)
-try:
-    nltk.data.find('tokenizers/punkt')
-except LookupError:
-    nltk.download('punkt')
 
 def process_pdf(file_path):
     """
@@ -124,17 +116,30 @@ def preprocess_text(text):
 def chunk_text(text, chunk_size=1000, overlap=200):
     """
     Split text into overlapping chunks for better embedding and retrieval
+    Uses simple splitting method to avoid NLTK issues
     """
     if not text:
         return []
     
     chunks = []
     
-    # First try to split by proper sentences
-    sentences = sent_tokenize(text)
+    # Simple approach: split text by newlines and periods
+    # This is less accurate than NLTK but more reliable without dependencies
+    simple_sentences = []
+    # Split by newlines first
+    paragraphs = text.split('\n')
+    for paragraph in paragraphs:
+        if not paragraph.strip():
+            continue
+        # Then split by periods (approximate sentences)
+        paragraph_sentences = paragraph.split('.')
+        for sentence in paragraph_sentences:
+            if sentence.strip():
+                simple_sentences.append(sentence.strip() + '.')
     
+    # Now chunk these simple sentences
     current_chunk = ""
-    for sentence in sentences:
+    for sentence in simple_sentences:
         # If adding this sentence exceeds the chunk size, store the current chunk and start a new one
         if len(current_chunk) + len(sentence) > chunk_size and current_chunk:
             chunks.append(current_chunk.strip())
@@ -147,7 +152,7 @@ def chunk_text(text, chunk_size=1000, overlap=200):
     if current_chunk:
         chunks.append(current_chunk.strip())
     
-    # If we couldn't get proper sentences (rare), fall back to character chunking
+    # If we couldn't get proper sentences, fall back to character chunking
     if not chunks:
         for i in range(0, len(text), chunk_size - overlap):
             chunk = text[i:i + chunk_size]
