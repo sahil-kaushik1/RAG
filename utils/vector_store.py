@@ -103,8 +103,14 @@ class VectorStore:
         # Sort by score and take top_k
         all_results.sort(key=lambda x: x["score"], reverse=True)
         
-        # If no good matches, provide random documents as fallback for demo purposes
-        if not all_results and self.documents:
+        # If user explicitly wants results only above min_score, don't use fallbacks
+        if min_score > 0:
+            # Filter out results below minimum score
+            all_results = [result for result in all_results if result["score"] >= min_score]
+            return all_results[:top_k]
+        
+        # If no good matches AND no minimum score filter is set, provide random documents as fallback
+        if not all_results and self.documents and min_score == 0:
             # Get random documents for demonstration
             doc_ids = list(self.documents.keys())
             sample_size = min(top_k, len(doc_ids))

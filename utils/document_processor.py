@@ -9,6 +9,7 @@ from trafilatura import fetch_url, extract
 import pytesseract
 from pdf2image import convert_from_path
 from PIL import Image
+import numpy as np
 
 def process_pdf(file_path):
     """
@@ -16,59 +17,152 @@ def process_pdf(file_path):
     Uses PyPDF2, pdfplumber, and OCR (Tesseract) for image-based PDFs
     """
     text = ""
+    debug_log = []  # Track processing steps for debugging
+    
+    # Create a debug log file
+    debug_file = os.path.join("debug_logs", f"pdf_processing_{os.path.basename(file_path)}.log")
+    
+    debug_log.append(f"Starting PDF processing for {file_path}")
     
     # Try with PyPDF2 first
     try:
         with open(file_path, 'rb') as file:
             reader = PyPDF2.PdfReader(file)
+            debug_log.append(f"PyPDF2: Found {len(reader.pages)} pages")
+            
             for page_num in range(len(reader.pages)):
                 page = reader.pages[page_num]
                 page_text = page.extract_text() or ""
                 text += page_text + "\n\n"
+                
+            debug_log.append(f"PyPDF2: Extracted {len(text.strip())} characters")
     except Exception as e:
-        print(f"Error with PyPDF2: {str(e)}")
+        error_msg = f"Error with PyPDF2: {str(e)}"
+        debug_log.append(error_msg)
+        print(error_msg)
     
     # If PyPDF2 didn't extract much, try pdfplumber
     if len(text.strip()) < 100:
+        debug_log.append("Text too short, trying pdfplumber")
         try:
             with pdfplumber.open(file_path) as pdf:
+                debug_log.append(f"pdfplumber: Found {len(pdf.pages)} pages")
                 for page in pdf.pages:
                     page_text = page.extract_text() or ""
                     text += page_text + "\n\n"
+                    
+                debug_log.append(f"pdfplumber: Extracted {len(text.strip())} characters")
         except Exception as e:
-            print(f"Error with pdfplumber: {str(e)}")
+            error_msg = f"Error with pdfplumber: {str(e)}"
+            debug_log.append(error_msg)
+            print(error_msg)
     
     # If still not much text, it might be an image-based PDF, try OCR
     if len(text.strip()) < 100:
+        debug_log.append("Text still too short, attempting OCR on image-based PDF")
+        print("Attempting OCR on image-based PDF...")
+        
         try:
-            print("Attempting OCR on image-based PDF...")
             # Create a temporary directory for images
-            temp_dir = os.path.join(os.path.dirname(file_path), "temp_ocr")
+            temp_dir = os.path.join("debug_logs", "temp_ocr")
             os.makedirs(temp_dir, exist_ok=True)
+            debug_log.append(f"Created temp directory: {temp_dir}")
             
             # Convert PDF to images
-            images = convert_from_path(file_path, output_folder=temp_dir)
+            debug_log.append("Converting PDF to images...")
+            try:
+                images = convert_from_path(file_path, output_folder=temp_dir)
+                debug_log.append(f"Conversion successful, got {len(images)} images")
+            except Exception as e:
+                error_msg = f"Error converting PDF to images: {str(e)}"
+                debug_log.append(error_msg)
+                print(error_msg)
+                # Try with alternate parameters
+                try:
+                    debug_log.append("Trying with alternate parameters...")
+                    images = convert_from_path(
+                        file_path, 
+                        output_folder=temp_dir,
+                        dpi=200,  # Lower DPI
+                        fmt='jpeg',  # Use JPEG format
+                        thread_count=1,  # Single thread
+                        use_pdftocairo=True  # Use pdftocairo instead of pdftoppm
+                    )
+                    debug_log.append(f"Alternate conversion successful, got {len(images)} images")
+                except Exception as inner_e:
+                    error_msg = f"Error with alternate conversion: {str(inner_e)}"
+                    debug_log.append(error_msg)
+                    print(error_msg)
+                    images = []
             
-            # Perform OCR on each image
-            ocr_text = ""
-            for i, image in enumerate(images):
-                # Perform OCR using Tesseract
-                page_text = pytesseract.image_to_string(image, lang='eng')
-                ocr_text += f"Page {i+1}:\n{page_text}\n\n"
-            
-            # If OCR extracted text, use it
-            if len(ocr_text.strip()) > 0:
-                text = ocr_text
-                print("OCR extraction successful")
-            
-            # Clean up temporary files
-            for file in os.listdir(temp_dir):
-                os.remove(os.path.join(temp_dir, file))
-            os.rmdir(temp_dir)
-            
+            # Check if we have images to process
+            if images:
+                # Perform OCR on each image
+                ocr_text = ""
+                debug_log.append("Starting OCR on images...")
+                
+                for i, image in enumerate(images):
+                    debug_log.append(f"Processing image {i+1}...")
+                    
+                    try:
+                        # Save image for debugging
+                        image_path = os.path.join(temp_dir, f"page_{i+1}.jpg")
+                        image.save(image_path, "JPEG")
+                        debug_log.append(f"Saved image to {image_path}")
+                        
+                        # Try to enhance image for better OCR
+                        try:
+                            # Convert to grayscale
+                            gray_image = image.convert('L')
+                            
+                            # Increase contrast
+                            enhanced_image = Image.fromarray(
+                                255 * (np.array(gray_image) > 128).astype(np.uint8)
+                            )
+                            
+                            # Save enhanced image
+                            enhanced_path = os.path.join(temp_dir, f"enhanced_{i+1}.jpg")
+                            enhanced_image.save(enhanced_path)
+                            debug_log.append(f"Enhanced image saved to {enhanced_path}")
+                            
+                            # Use enhanced image for OCR
+                            page_text = pytesseract.image_to_string(enhanced_image, lang='eng')
+                        except:
+                            # Fallback to original image if enhancement fails
+                            debug_log.append("Image enhancement failed, using original image")
+                            page_text = pytesseract.image_to_string(image, lang='eng')
+                        
+                        debug_log.append(f"OCR extracted {len(page_text)} characters from image {i+1}")
+                        ocr_text += f"Page {i+1}:\n{page_text}\n\n"
+                    except Exception as e:
+                        error_msg = f"Error processing image {i+1}: {str(e)}"
+                        debug_log.append(error_msg)
+                        print(error_msg)
+                
+                # If OCR extracted text, use it
+                if len(ocr_text.strip()) > 0:
+                    text = ocr_text
+                    success_msg = f"OCR extraction successful: {len(ocr_text)} characters"
+                    debug_log.append(success_msg)
+                    print(success_msg)
+                else:
+                    debug_log.append("OCR extraction produced no text")
+                
+                # We'll keep the temp files for debugging
+                debug_log.append("Keeping temporary files for debugging")
+            else:
+                debug_log.append("No images were generated from PDF")
+                
         except Exception as e:
-            print(f"Error with OCR: {str(e)}")
+            error_msg = f"Error with OCR: {str(e)}"
+            debug_log.append(error_msg)
+            print(error_msg)
     
+    # Write debug log
+    with open(debug_file, 'w') as f:
+        f.write('\n'.join(debug_log))
+    
+    print(f"PDF processing complete: {len(text.strip())} characters extracted")
     return text.strip()
 
 def process_csv(file_path):
