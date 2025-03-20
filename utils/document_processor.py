@@ -6,11 +6,14 @@ import pandas as pd
 import speech_recognition as sr
 import pdfplumber
 from trafilatura import fetch_url, extract
+import pytesseract
+from pdf2image import convert_from_path
+from PIL import Image
 
 def process_pdf(file_path):
     """
     Process a PDF file and extract text
-    Uses both PyPDF2 and pdfplumber for more complete extraction
+    Uses PyPDF2, pdfplumber, and OCR (Tesseract) for image-based PDFs
     """
     text = ""
     
@@ -20,7 +23,8 @@ def process_pdf(file_path):
             reader = PyPDF2.PdfReader(file)
             for page_num in range(len(reader.pages)):
                 page = reader.pages[page_num]
-                text += page.extract_text() + "\n\n"
+                page_text = page.extract_text() or ""
+                text += page_text + "\n\n"
     except Exception as e:
         print(f"Error with PyPDF2: {str(e)}")
     
@@ -33,6 +37,37 @@ def process_pdf(file_path):
                     text += page_text + "\n\n"
         except Exception as e:
             print(f"Error with pdfplumber: {str(e)}")
+    
+    # If still not much text, it might be an image-based PDF, try OCR
+    if len(text.strip()) < 100:
+        try:
+            print("Attempting OCR on image-based PDF...")
+            # Create a temporary directory for images
+            temp_dir = os.path.join(os.path.dirname(file_path), "temp_ocr")
+            os.makedirs(temp_dir, exist_ok=True)
+            
+            # Convert PDF to images
+            images = convert_from_path(file_path, output_folder=temp_dir)
+            
+            # Perform OCR on each image
+            ocr_text = ""
+            for i, image in enumerate(images):
+                # Perform OCR using Tesseract
+                page_text = pytesseract.image_to_string(image, lang='eng')
+                ocr_text += f"Page {i+1}:\n{page_text}\n\n"
+            
+            # If OCR extracted text, use it
+            if len(ocr_text.strip()) > 0:
+                text = ocr_text
+                print("OCR extraction successful")
+            
+            # Clean up temporary files
+            for file in os.listdir(temp_dir):
+                os.remove(os.path.join(temp_dir, file))
+            os.rmdir(temp_dir)
+            
+        except Exception as e:
+            print(f"Error with OCR: {str(e)}")
     
     return text.strip()
 
