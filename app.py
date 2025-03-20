@@ -289,6 +289,7 @@ with tab1:
                                     "path": temp_file_path
                                 })
                                 
+                                save_data()  # Save to disk
                                 st.success(f"Audio processed and added to collection '{st.session_state.current_collection}'!")
                             else:
                                 st.error("Failed to extract text from the audio file.")
@@ -326,6 +327,7 @@ with tab1:
                                 "chunks": len(chunks)
                             })
                             
+                            save_data()  # Save to disk
                             st.success(f"Website content processed and added to collection '{st.session_state.current_collection}'!")
                         else:
                             st.error("Failed to extract content from the website.")
@@ -422,5 +424,6 @@ with tab3:
                         collection=st.session_state.current_collection
                     )
                     
+                    save_data()  # Save to disk
                     st.success(f"Document removed from collection!")
                     st.rerun()
