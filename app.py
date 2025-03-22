@@ -1,5 +1,4 @@
 import os
-import streamlit as st
 import tempfile
 import pandas as pd
 import re
@@ -24,10 +23,38 @@ from utils.nltk_setup import download_nltk_data
 # torch.cuda.set_per_process_memory_fraction(0.1, 0)  # Limit to 50% of GPU 0 memory
 import shutil
 
+import asyncio
+# import streamlit as st
+
+# Ensure an event loop exists before running Streamlit
+import asyncio
+import sys
+import sys
+import asyncio
+
+if sys.platform == "linux":
+    try:
+        asyncio.get_running_loop()
+    except RuntimeError:
+        asyncio.set_event_loop(asyncio.new_event_loop())
+        
+import sys
+from unittest.mock import MagicMock
+
+# Block Streamlit from inspecting torch._classes
+sys.modules["torch.classes"] = MagicMock()
+sys.modules["torch._classes"] = MagicMock()
+
+# Now import Streamlit and other modules
+import streamlit as st
+import torch  # Safe to import after patching
+import streamlit as st
 
 
-# Download required NLTK data
-download_nltk_data()
+try:
+    asyncio.get_running_loop()
+except RuntimeError:
+    asyncio.set_event_loop(asyncio.new_event_loop())
 
 # Page configuration
 st.set_page_config(
@@ -40,6 +67,15 @@ st.set_page_config(
         'About': None
     }
 )
+
+
+st.title("Your RAG Chatbot")
+
+
+
+# Download required NLTK data
+download_nltk_data()
+
 
 # Initialize or load data from disk
 DATA_DIR = "data"
