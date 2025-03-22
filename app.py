@@ -24,8 +24,16 @@ from utils.nltk_setup import download_nltk_data
 import shutil
 
 import asyncio
-# import streamlit as st
-os.system('pip install yt-dlp')
+import os
+import subprocess
+
+# Try installing yt-dlp if not already installed
+try:
+    import yt_dlp
+except ImportError:
+    print("yt-dlp not found, installing...")
+    subprocess.check_call([os.sys.executable, "-m", "pip", "install", "yt-dlp"])
+
 # Ensure an event loop exists before running Streamlit
 import asyncio
 import sys
