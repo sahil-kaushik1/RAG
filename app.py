@@ -15,7 +15,7 @@ try:
     import yt_dlp
 except ImportError:
     print("yt-dlp not found, installing...")
-    subprocess.check_call([sys.executable, "-m", "pip", "install", "--user", "yt-dlp"])
+    subprocess.check_call([sys.executable, "-m", "pip", "install",  "yt-dlp"])
 
 # Your remaining app code...
 
