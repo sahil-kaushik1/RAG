@@ -7,11 +7,17 @@ import time
 import subprocess
 import sys
 import pickle
+import subprocess
+import sys
+
+# Try to import yt-dlp
 try:
     import yt_dlp
 except ImportError:
     print("yt-dlp not found, installing...")
-    subprocess.check_call([os.sys.executable, "-m", "pip", "install", "yt-dlp"])
+    subprocess.check_call([sys.executable, "-m", "pip", "install", "--user", "yt-dlp"])
+
+# Your remaining app code...
 
 from utils.document_processor import (
     process_pdf, process_csv, process_audio, 
