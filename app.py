@@ -4,6 +4,8 @@ import pandas as pd
 import re
 import threading
 import time
+import subprocess
+import sys
 import pickle
 try:
     import yt_dlp
