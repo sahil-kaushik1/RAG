@@ -1,0 +1,3 @@
+streamlit
+pyPDF2
+SpeechRecognition

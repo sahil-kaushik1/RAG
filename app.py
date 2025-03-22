@@ -2,18 +2,29 @@ import os
 import streamlit as st
 import tempfile
 import pandas as pd
+import re
 import threading
 import time
 import pickle
 from utils.document_processor import (
     process_pdf, process_csv, process_audio, 
-    process_website, preprocess_text, chunk_text
+    process_website, preprocess_text, chunk_text, process_youtube, extract_keywords, clean_keywords
 )
 from utils.vector_store import VectorStore
 from utils.rag_engine import RAGEngine
 from utils.file_monitor import start_file_monitoring
 from utils.web_scraper import get_website_text_content
 from utils.nltk_setup import download_nltk_data
+# import asyncio
+# asyncio.set_event_loop_policy(asyncio.DefaultEventLoopPolicy())
+# os.environ["CUDA_VISIBLE_DEVICES"] = ""
+
+# import torch
+
+# torch.cuda.set_per_process_memory_fraction(0.1, 0)  # Limit to 50% of GPU 0 memory
+import shutil
+
+
 
 # Download required NLTK data
 download_nltk_data()
@@ -22,7 +33,12 @@ download_nltk_data()
 st.set_page_config(
     page_title="Multimodal RAG System",
     page_icon="📚",
-    layout="wide"
+    layout="wide",
+    menu_items={
+        'Get Help': None,
+        'Report a bug': None,
+        'About': None
+    }
 )
 
 # Initialize or load data from disk
@@ -153,6 +169,16 @@ with st.sidebar:
 # Main content area with tabs
 tab1, tab2, tab3 = st.tabs(["Document Upload", "Query System", "Collection Contents"])
 
+# Move cleanup function and button to the top, outside tabs
+def cleanup_temp_dir():
+    if os.path.exists(st.session_state.temp_dir):
+        shutil.rmtree(st.session_state.temp_dir)
+        os.makedirs(st.session_state.temp_dir)
+
+# Place this before the tabs, after session state initialization
+st.button("Clean Temporary Files", on_click=cleanup_temp_dir, help="Remove all temporary files")
+st.success("Temporary files cleaned!", icon="✅")  # This will only show briefly when clicked
+
 # Document Upload Tab
 with tab1:
     if not st.session_state.current_collection:
@@ -163,7 +189,7 @@ with tab1:
         # Select document type
         doc_type = st.radio(
             "Select document type to upload",
-            ["PDF", "CSV", "Audio File", "Website URL"]
+            ["PDF", "CSV", "Audio File", "Website URL", "YouTube Video"]
         )
         
         if doc_type == "PDF":
@@ -176,10 +202,20 @@ with tab1:
                 
                 if st.button("Process PDF"):
                     with st.spinner("Processing PDF..."):
+                        progress_container = st.empty()
+                        for i in range(100):  # Simulate progress
+                            progress_container.progress(i + 1)
+                            time.sleep(0.01)
                         # Process the PDF and get chunks
                         text = process_pdf(temp_file_path)
-                        preprocessed_text = preprocess_text(text)
-                        chunks = chunk_text(preprocessed_text)
+                        dis_text = text
+                        if isinstance(text, list):
+                            text = "\n".join([doc.page_content if hasattr(doc, "page_content") else str(doc) for doc in text])
+
+                        # print("hi")
+                        # print(text)
+                        # preprocessed_text = preprocess_text(text)
+                        chunks = chunk_text(text)
                         
                         # Add chunks to vector store with metadata
                         doc_id = f"pdf_{uploaded_file.name}_{int(time.time())}"
@@ -212,6 +248,10 @@ with tab1:
                         
                         save_data()  # Save to disk
                         st.success(f"PDF processed and added to collection '{st.session_state.current_collection}'!")
+                        
+                        # Display processed content
+                        with st.expander("View Processed PDF Content", expanded=True):
+                            st.text_area("Extracted Text", dis_text, height=300)
         
         elif doc_type == "CSV":
             uploaded_file = st.file_uploader("Upload CSV", type=["csv"])
@@ -228,10 +268,17 @@ with tab1:
                 
                 if st.button("Process CSV"):
                     with st.spinner("Processing CSV..."):
+                        progress_container = st.empty()
+                        for i in range(100):  # Simulate progress
+                            progress_container.progress(i + 1)
+                            time.sleep(0.01)
                         # Process the CSV and get chunks
                         text = process_csv(temp_file_path)
-                        preprocessed_text = preprocess_text(text)
-                        chunks = chunk_text(preprocessed_text)
+                        dis_text = text
+                        if isinstance(text, list):
+                            text = "\n".join([doc.page_content if hasattr(doc, "page_content") else str(doc) for doc in text])
+                        # preprocessed_text = preprocess_text(text)
+                        chunks = chunk_text(text)
                         
                         # Add chunks to vector store with metadata
                         doc_id = f"csv_{uploaded_file.name}_{int(time.time())}"
@@ -255,6 +302,10 @@ with tab1:
                         
                         save_data()  # Save to disk
                         st.success(f"CSV processed and added to collection '{st.session_state.current_collection}'!")
+                        
+                        # Display processed content
+                        with st.expander("View Processed CSV Content", expanded=True):
+                            st.text_area("Extracted Text", text, height=300)
         
         elif doc_type == "Audio File":
             uploaded_file = st.file_uploader("Upload Audio File", type=["mp3", "wav", "m4a"])
@@ -266,12 +317,16 @@ with tab1:
                 
                 if st.button("Process Audio"):
                     with st.spinner("Processing Audio... This might take a while."):
+                        progress_container = st.empty()
+                        for i in range(100):  # Simulate progress
+                            progress_container.progress(i + 1)
+                            time.sleep(0.01)
                         try:
                             # Process the audio and get text
                             text = process_audio(temp_file_path)
                             if text:
-                                preprocessed_text = preprocess_text(text)
-                                chunks = chunk_text(preprocessed_text)
+                                # preprocessed_text = preprocess_text(text)
+                                chunks = chunk_text(text)
                                 
                                 # Add chunks to vector store with metadata
                                 doc_id = f"audio_{uploaded_file.name}_{int(time.time())}"
@@ -295,6 +350,10 @@ with tab1:
                                 
                                 save_data()  # Save to disk
                                 st.success(f"Audio processed and added to collection '{st.session_state.current_collection}'!")
+                                
+                                # Display processed content
+                                with st.expander("View Processed Audio Content", expanded=True):
+                                    st.text_area("Extracted Text", text, height=300)
                             else:
                                 st.error("Failed to extract text from the audio file.")
                         except Exception as e:
@@ -305,12 +364,16 @@ with tab1:
             
             if st.button("Process Website") and url:
                 with st.spinner("Processing Website..."):
+                    progress_container = st.empty()
+                    for i in range(100):  # Simulate progress
+                        progress_container.progress(i + 1)
+                        time.sleep(0.01)
                     try:
                         # Extract content from the website
-                        text = get_website_text_content(url)
+                        text = process_website(url)
                         if text:
-                            preprocessed_text = preprocess_text(text)
-                            chunks = chunk_text(preprocessed_text)
+                            # preprocessed_text = preprocess_text(text)
+                            chunks = chunk_text(text)
                             
                             # Add chunks to vector store with metadata
                             doc_id = f"web_{url.replace('://', '_').replace('/', '_')}_{int(time.time())}"
@@ -333,10 +396,59 @@ with tab1:
                             
                             save_data()  # Save to disk
                             st.success(f"Website content processed and added to collection '{st.session_state.current_collection}'!")
+                            
+                            # Display processed content
+                            with st.expander("View Processed Website Content", expanded=True):
+                                st.text_area("Extracted Text", text, height=300)
                         else:
                             st.error("Failed to extract content from the website.")
                     except Exception as e:
                         st.error(f"Error processing website: {str(e)}")
+        elif doc_type == "YouTube Video":  # Consistent naming
+            url = st.text_input("Enter YouTube URL", placeholder="https://www.youtube.com/watch?v=VIDEO_ID")
+            
+            if st.button("Process Video") and url:
+                with st.spinner("Processing video..."):
+                    progress_container = st.empty()
+                    for i in range(100):  # Simulate progress
+                        progress_container.progress(i + 1)
+                        time.sleep(0.01)
+                    try:
+                        # Extract audio and transcribe text from the YouTube video
+                        text = process_youtube(url)
+                        if text:
+                            # preprocessed_text = preprocess_text(text)
+                            chunks = chunk_text(text)
+                            
+                            # Add chunks to vector store with metadata
+                            doc_id = f"video_{url.replace('://', '_').replace('/', '_')}_{int(time.time())}"
+                            metadata = {
+                                "url": url,
+                                "type": "youtube_video",  # Consistent naming
+                                "collection": st.session_state.current_collection,
+                                "document_id": doc_id
+                            }
+                            
+                            st.session_state.vector_store.add_documents(chunks, metadata)
+                            
+                            # Add document info to collection
+                            st.session_state.collections[st.session_state.current_collection].append({
+                                "id": doc_id,
+                                "url": url,
+                                "type": "youtube_video",  # Consistent naming
+                                "chunks": len(chunks)
+                            })
+                            
+                            save_data()  # Save to disk
+                            st.success(f"YouTube video content processed and added to collection '{st.session_state.current_collection}'!")
+                            
+                            # Display processed content
+                            with st.expander("View Processed YouTube Content", expanded=True):
+                                st.text_area("Extracted Text", text, height=800)
+                        else:
+                            st.error("Failed to extract content from the YouTube video.")
+                    except Exception as e:
+                        st.error(f"Error processing YouTube video: {str(e)}")
 
 # Query System Tab
 with tab2:
@@ -375,9 +487,24 @@ with tab2:
                 if retrieved_chunks:
                     for i, chunk_info in enumerate(retrieved_chunks):
                         with st.expander(f"Chunk {i+1} (Similarity: {chunk_info['score']:.4f})"):
-                            st.write(f"**Source**: {chunk_info['metadata'].get('filename', chunk_info['metadata'].get('url', 'Unknown'))}")
-                            st.write(f"**Type**: {chunk_info['metadata'].get('type', 'Unknown')}")
-                            st.text(chunk_info['text'])
+                            st.write(f"*Source*: {chunk_info['metadata'].get('filename', chunk_info['metadata'].get('url', 'Unknown'))}")
+                            st.write(f"*Type*: {chunk_info['metadata'].get('type', 'Unknown')}")
+
+                            keywords = extract_keywords(chunk_info.get('text', ''))
+                            keywords = clean_keywords(keywords)
+
+                            text = chunk_info['text']
+
+                            for keyword in sorted(keywords, key=len, reverse=True):
+                                pattern = rf'(?<!\w)({re.escape(keyword)})(?!\w)'  # Match whole words only
+                                text = re.sub(pattern, rf'<span style="color:#FF6F61; font-weight:bold;">\1</span>', text, flags=re.IGNORECASE)
+
+                            st.markdown(f'<div style="line-height:1.6">{text}</div>', unsafe_allow_html=True)  
+
+                            if keywords:
+                                st.markdown("")
+                                st.markdown("###### Keywords - ")
+                                st.markdown(", ".join([f'<span style="font-weight:bold;">{kw}</span>' for kw in keywords]), unsafe_allow_html=True)
                 else:
                     st.info("No relevant information found.")
 

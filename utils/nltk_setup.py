@@ -3,6 +3,7 @@ This module ensures that all required NLTK data is downloaded
 """
 import nltk
 
+
 def download_nltk_data():
     """
     Downloads necessary NLTK data packages
@@ -10,6 +11,7 @@ def download_nltk_data():
     try:
         # Download commonly used NLTK data packages
         nltk.download('punkt')
+        nltk.download('punkt_tab')
         nltk.download('stopwords')
         nltk.download('wordnet')
         print("NLTK data downloaded successfully")
