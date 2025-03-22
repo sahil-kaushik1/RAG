@@ -1,3 +1,4 @@
 streamlit
 pyPDF2
 SpeechRecognition
+yt-dlp
