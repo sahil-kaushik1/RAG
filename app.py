@@ -25,7 +25,7 @@ import shutil
 
 import asyncio
 # import streamlit as st
-
+os.system('pip install yt-dlp')
 # Ensure an event loop exists before running Streamlit
 import asyncio
 import sys
