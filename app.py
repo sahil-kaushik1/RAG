@@ -32,12 +32,14 @@ import sys
 import sys
 import asyncio
 
+# os.system("streamlit run app.py --server.port 8501 --server.address 0.0.0.0")
+
 if sys.platform == "linux":
     try:
         asyncio.get_running_loop()
     except RuntimeError:
         asyncio.set_event_loop(asyncio.new_event_loop())
-        
+
 import sys
 from unittest.mock import MagicMock
 
