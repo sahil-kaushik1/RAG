@@ -5,6 +5,12 @@ import re
 import threading
 import time
 import pickle
+try:
+    import yt_dlp
+except ImportError:
+    print("yt-dlp not found, installing...")
+    subprocess.check_call([os.sys.executable, "-m", "pip", "install", "yt-dlp"])
+
 from utils.document_processor import (
     process_pdf, process_csv, process_audio, 
     process_website, preprocess_text, chunk_text, process_youtube, extract_keywords, clean_keywords
@@ -28,11 +34,6 @@ import os
 import subprocess
 
 # Try installing yt-dlp if not already installed
-try:
-    import yt_dlp
-except ImportError:
-    print("yt-dlp not found, installing...")
-    subprocess.check_call([os.sys.executable, "-m", "pip", "install", "yt-dlp"])
 
 # Ensure an event loop exists before running Streamlit
 import asyncio
